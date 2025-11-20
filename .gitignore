@@ -1,0 +1,72 @@
+########################
+# Compilação .NET
+########################
+bin/
+obj/
+[Bb]uild/
+[Ll]og/
+*.log
+
+# Ficheiros temporários de publicação
+artifacts/
+
+########################
+# Visual Studio / Rider
+########################
+.vs/
+_ReSharper*/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.idea/
+
+########################
+# VS Code
+########################
+# Ignorar tudo na pasta .vscode...
+.vscode/*
+# ...mas permitir estes ficheiros de config (se quiseres versioná-los)
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+########################
+# NuGet
+########################
+*.nupkg
+*.snupkg
+packages/
+*.nuget.props
+*.nuget.targets
+
+########################
+# Ficheiros de utilizador / máquina
+########################
+*.userprefs
+
+# Config local de execução (se preferires que não entre no repo)
+**/Properties/launchSettings.json
+
+########################
+# Sistemas Operativos
+########################
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+########################
+# Node / Frontend (caso uses)
+########################
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
