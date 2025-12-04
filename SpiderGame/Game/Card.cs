@@ -12,7 +12,4 @@ public class Card
         Rank = rank;
         IsFaceUp = isFaceUp;
     }
-
-    public override string ToString()
-        => $"{Rank} of {Suit}";
 }

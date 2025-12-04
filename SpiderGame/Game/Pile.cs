@@ -21,11 +21,6 @@ public class Pile
         return _cards.Skip(index);
     }
 
-    public void RemoveFrom(int index)
-    {
-        _cards.RemoveRange(index, _cards.Count - index);
-    }
-
     // 🔹 NOVO: devolve um bloco [index..index+count-1] e remove-o da pilha
     public List<Card> TakeRange(int index, int count)
     {

@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace SpiderGame.Game;
+﻿namespace SpiderGame.Game;
 
 public class SpiderGame
 {
@@ -183,40 +179,6 @@ public class SpiderGame
     }
     #endregion
 
-    #region ...[Is Valid Descending Sequence]...
-    private bool IsValidDescendingSequence(IReadOnlyList<Card> sequence)
-    {
-        if (sequence.Count == 0) return false;
-        if (sequence.Count == 1) return true;
-
-        for (int i = 0; i < sequence.Count - 1; i++)
-        {
-            var current = sequence[i];
-            var next = sequence[i + 1];
-
-            // mesmo naipe
-            if (current.Suit != next.Suit) return false;
-
-            // valor seguinte tem de ser 1 abaixo (ex: King -> Queen -> Jack ... )
-            if ((int)current.Rank != (int)next.Rank + 1) return false;
-        }
-
-        return true;
-    }
-    #endregion
-
-    #region ...[Can Place On Pile]...
-    private bool CanPlaceOnPile(Card movingCard, Pile pile)
-    {
-        if (pile.TopCard is null) return true; // coluna vazia aceita qualquer carta
-
-        var top = pile.TopCard;
-
-        // regra: movingCard tem de ser 1 abaixo da carta do topo
-        return (int)movingCard.Rank == (int)top!.Rank - 1;
-    }
-    #endregion
-
     #region ...[Check Completed Runs]...
     private void CheckAllPilesForCompletedRuns()
     {
@@ -231,7 +193,6 @@ public class SpiderGame
         bool removed;
         do
         {
-            removed = false;
 
             if (pile.Count < 13)
                 break;
@@ -296,21 +257,6 @@ public class SpiderGame
     }
     #endregion
 
-    #region ...[Is Complete Run]...
-    private bool IsCompleteRun(IReadOnlyList<Card> run)
-    {
-        if (run.Count != 13) return false;
-
-        // todas do mesmo naipe
-        if (run.Any(c => c.Suit != run[0].Suit)) return false;
-
-        // começa em King e termina em Ace
-        if (run[0].Rank != Rank.King || run[^1].Rank != Rank.Ace) return false;
-
-        return IsValidDescendingSequence(run);
-    }
-    #endregion
-
     #region ...[Is Game Won]...
     public bool IsGameWon()
     {
@@ -365,53 +311,6 @@ public class SpiderGame
 
         // devolve o índice da última carta que ainda pertence ao bloco movível
         return i;
-    }
-    #endregion
-
-    #region ...[Has Any Tableau Move]...
-    private bool HasAnyTableauMove()
-    {
-        // percorre todas as colunas
-        for (int fromPileIndex = 0; fromPileIndex < Piles.Count; fromPileIndex++)
-        {
-            var fromPile = Piles[fromPileIndex];
-            var cards = fromPile.Cards;
-
-            int lastIndex = cards.Count - 1;
-            if (lastIndex < 0)
-                continue;
-
-            for (int i = 0; i <= lastIndex; i++)
-            {
-                var card = cards[i];
-                if (!card.IsFaceUp) continue;
-
-                int endIndex = GetMovableSequenceEnd(fromPileIndex, i);
-                if (i != lastIndex && endIndex != lastIndex)
-                    continue;
-
-                var first = cards[i];
-
-                for (int toPileIndex = 0; toPileIndex < Piles.Count; toPileIndex++)
-                {
-                    if (toPileIndex == fromPileIndex) continue;
-
-                    var toPile = Piles[toPileIndex];
-
-                    if (toPile.Count == 0)
-                        return true;
-
-                    var top = toPile.TopCard;
-                    if (top is null || !top.IsFaceUp)
-                        continue;
-
-                    if ((int)top.Rank == (int)first.Rank + 1)
-                        return true;
-                }
-            }
-        }
-
-        return false;
     }
     #endregion
 
