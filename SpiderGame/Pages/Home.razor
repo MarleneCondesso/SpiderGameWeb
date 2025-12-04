@@ -1,7 +1,427 @@
 ﻿@page "/"
+@using SpiderGame.Game
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Web
 
-<PageTitle>Home</PageTitle>
+<div class="spider-root">
+    <div class="spider-top-bar">
+        <div class="spider-title">Spider (@suitLevel naipe@((suitLevel > 1) ? "s" : ""))</div>
+        <div class="spider-info">
+            <span>Sequencias completas: @game.CompletedRuns / 8</span>
+        </div>
+    </div>
 
-<h1>Hello, world!</h1>
+    <div class="spider-controls-row">
+        <div class="spider-controls-left">
+            <button @onclick="NewGame">Novo jogo</button>
+        </div>
 
-Welcome to your new app.
+        <div class="spider-controls-center">
+            <label class="suit-level-label">Nivel:</label>
+            <select value="@suitLevel" @onchange="OnSuitLevelChanged">
+                <option value="1">1 naipe (facil)</option>
+                <option value="2">2 naipes (medio)</option>
+                <option value="4">4 naipes (dificil)</option>
+            </select>
+        </div>
+
+        <div class="spider-controls-right">
+            <div class="completed-area">
+                @for (int i = 0; i < game.CompletedRuns; i++)
+                {
+                    <div class="completed-card back"></div>
+                }
+            </div>
+
+            <div class="stock-area" @onclick="DealFromStock">
+                @if (game.RemainingDeals > 0)
+                {
+                    <div class="stock-stack">
+                        @for (int i = 0; i < game.RemainingDeals; i++)
+                        {
+                            <div class="stock-card back"></div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="stock-card empty"></div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="spider-status">@statusMessage</div>
+
+    @if (game.IsGameWon())
+    {
+        <div class="spider-overlay spider-overlay-win">
+            <div class="spider-confetti">
+                @for (int i = 0; i < 40; i++)
+                {
+                    <div class="confetti-piece"></div>
+                }
+            </div>
+
+            <div class="spider-overlay-content">
+                <div class="spider-overlay-emoji">🎉</div>
+                <h2>Ganhaste!!</h2>
+                <p>Completaste todas as sequências. Excelente jogo!</p>
+                <button @onclick="NewGame">Novo jogo</button>
+            </div>
+        </div>
+    }
+
+    @if (game.IsGameLost())
+    {
+        <div class="spider-overlay spider-overlay-lose">
+            <div class="spider-overlay-content">
+                <div class="spider-overlay-emoji">😢</div>
+                <h2>Fim do jogo</h2>
+                <p>Já não há mais movimentos úteis disponíveis.</p>
+                <button @onclick="NewGame">Tentar outra vez</button>
+            </div>
+        </div>
+    }
+
+    <div class="spider-tableau-wrapper">
+        <div class="spider-tableau">
+            @for (int colIndex = 0; colIndex < game.Piles.Count; colIndex++)
+            {
+                var pile = game.Piles[colIndex];
+                int pileIndex = colIndex;
+                int faceUpCount = 0;
+                int faceDownCount = 0;
+
+                double pileCompress = pile.Cards.Count switch
+                {
+                    > 26 => 0.78,
+                    > 22 => 0.82,
+                    > 18 => 0.87,
+                    > 14 => 0.9,
+                    > 10 => 0.94,
+                    _ => 1.0
+                };
+                var pileCompressStr = pileCompress.ToString("0.###", CultureInfo.InvariantCulture);
+
+                <div class="spider-pile" style="--pile-compress:@pileCompressStr;" @ondragover:preventDefault="true"
+                    @ondrop="@(e => OnPileDrop(e, pileIndex))">
+
+
+                    @if (pile.Cards.Count == 0)
+                    {
+                        <div class="card-slot empty" style="--card-index:0;" @onclick="@(() => OnEmptyPileClick(pileIndex))">
+                        </div>
+                    }
+                    else
+                    {
+                        @for (int i = 0; i < pile.Cards.Count; i++)
+                        {
+                            var card = pile.Cards[i];
+                            int cardIndex = i;
+
+                            bool isTopCard = (i == pile.Cards.Count - 1);
+
+                            int faceUpBefore = faceUpCount;
+                            int faceDownBefore = faceDownCount;
+                            if (card.IsFaceUp) faceUpCount++; else faceDownCount++;
+
+                            bool isInSelectedSequence =
+                            HasSelection &&
+                            selectedPile == pileIndex &&
+                            card.IsFaceUp &&
+                            cardIndex >= selectedIndex &&
+                            selectedSequenceEnd >= 0 &&
+                            cardIndex <= selectedSequenceEnd;
+
+                            bool isDisabledBySelection =
+                            HasSelection &&
+                            selectedPile == pileIndex &&
+                            card.IsFaceUp &&
+                            !isInSelectedSequence;
+
+                            double stackPos = GetStackPos(faceDownBefore, faceUpBefore);
+                            string stackPosStr = stackPos.ToString("0.###", CultureInfo.InvariantCulture);
+
+                            bool isDraggable = IsCardDraggable(pileIndex, cardIndex, card);
+
+                            <div class="card-slot @(card.IsFaceUp ? "face-up" : "face-down")
+                                                             @(isTopCard ? "card-top" : "card-stacked")
+                                                             @(isInSelectedSequence ? "selected" : "")
+                                                             @(isDisabledBySelection ? "disabled-move" : "")" style="--card-index:@cardIndex;
+                                                    --stack-pos:@stackPosStr;
+                                                    --card-face:url('@GetCardImage(card)');" draggable="@isDraggable"
+                                @ondragstart="@(e => OnCardDragStart(e, pileIndex, cardIndex))"
+                                @onclick="@(() => OnCardClick(pileIndex, cardIndex))">
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private SpiderGame game = new SpiderGame();
+    private int suitLevel = 1;
+
+    private int selectedPile = -1;
+    private int selectedIndex = -1;
+    private int selectedSequenceEnd = -1;
+    private string statusMessage = "";
+
+    // estado do drag
+    private int dragFromPile = -1;
+    private int dragFromIndex = -1;
+
+    private bool HasSelection => selectedPile >= 0 && selectedIndex >= 0;
+
+    protected override void OnInitialized()
+    {
+        game = new SpiderGame(suitLevel);
+    }
+
+    private void NewGame()
+    {
+        game.NewGame(suitLevel);
+        ClearSelection();
+        statusMessage = "Novo jogo iniciado.";
+    }
+
+    private void DealFromStock()
+    {
+        if (!game.CanDealFromStock())
+        {
+            statusMessage = "Nao podes dar mais cartas agora.";
+            return;
+        }
+
+        game.DealFromStock();
+        ClearSelection();
+        statusMessage = "Linha distribuida.";
+    }
+
+    private void OnCardClick(int pileIndex, int cardIndex)
+    {
+        if (pileIndex < 0 || pileIndex >= game.Piles.Count)
+        {
+            statusMessage = $"Clique com coluna invalida ({pileIndex}).";
+            return;
+        }
+
+        var pile = game.Piles[pileIndex];
+
+        if (cardIndex < 0 || cardIndex >= pile.Cards.Count)
+        {
+            statusMessage = $"Clique com carta invalida ({cardIndex}).";
+            return;
+        }
+
+        var card = pile.Cards[cardIndex];
+
+        if (!card.IsFaceUp)
+        {
+            statusMessage = "Nao podes selecionar cartas viradas para baixo.";
+            return;
+        }
+
+        if (!HasSelection)
+        {
+            int lastIndex = pile.Cards.Count - 1;
+            int endIndex = game.GetMovableSequenceEnd(pileIndex, cardIndex);
+
+            if (cardIndex != lastIndex && endIndex != lastIndex)
+            {
+                statusMessage = "Só podes selecionar a última carta da coluna, ou um bloco sequencial que termine na última carta.";
+                return;
+            }
+
+            selectedPile = pileIndex;
+            selectedIndex = cardIndex;
+            selectedSequenceEnd = endIndex;
+
+            statusMessage = $"Selecionaste {GetCardLabel(card)} de {GetSuitName(card)} na coluna {pileIndex}.";
+            return;
+        }
+
+        if (selectedPile == pileIndex && selectedIndex == cardIndex)
+        {
+            ClearSelection();
+            statusMessage = "Selecao limpa.";
+            return;
+        }
+
+        int fromPile = selectedPile;
+        int fromIndex = selectedIndex;
+        int toPile = pileIndex;
+
+        bool moved = game.TryMoveSequence(fromPile, fromIndex, toPile);
+
+        statusMessage = moved ? "Movimento efetuado." : "Movimento invalido.";
+        ClearSelection();
+    }
+
+    private void OnEmptyPileClick(int pileIndex)
+    {
+        if (pileIndex < 0 || pileIndex >= game.Piles.Count)
+        {
+            statusMessage = $"Clique em coluna invalida ({pileIndex}).";
+            return;
+        }
+
+        if (!HasSelection)
+        {
+            statusMessage = "Seleciona primeiro uma carta para mover.";
+            return;
+        }
+
+        int fromPile = selectedPile;
+        int fromIndex = selectedIndex;
+        int toPile = pileIndex;
+
+        bool moved = game.TryMoveSequence(fromPile, fromIndex, toPile);
+
+        statusMessage = moved
+        ? "Movimento efetuado para coluna vazia."
+        : "Movimento invalido.";
+
+        ClearSelection();
+    }
+
+    private void OnSuitLevelChanged(ChangeEventArgs e)
+    {
+        if (e?.Value is null) return;
+        if (!int.TryParse(e.Value.ToString(), out var level)) return;
+
+        suitLevel = NormalizeSuitLevel(level);
+        game.NewGame(suitLevel);
+        ClearSelection();
+        statusMessage = $"Novo jogo iniciado ({suitLevel} naipe(s)).";
+    }
+
+    private int NormalizeSuitLevel(int level) => level switch
+    {
+        1 => 1,
+        2 => 2,
+        4 => 4,
+        _ => 1
+    };
+
+    private void ClearSelection()
+    {
+        selectedPile = -1;
+        selectedIndex = -1;
+        selectedSequenceEnd = -1;
+        dragFromPile = -1;
+        dragFromIndex = -1;
+    }
+
+    private string GetSuitName(Card card) => card.Suit switch
+    {
+        Suit.Spades => "espadas",
+        Suit.Hearts => "copas",
+        Suit.Diamonds => "ouros",
+        Suit.Clubs => "paus",
+        _ => "naipe"
+    };
+
+    private string GetCardImage(Card card)
+    {
+        var rank = GetCardLabel(card);
+        var suffix = card.Suit switch
+        {
+            Suit.Spades => "-spade",
+            Suit.Hearts => "-heart",
+            Suit.Diamonds => "-diamond",
+            _ => string.Empty
+        };
+
+        return $"/{rank}{suffix}.png";
+    }
+
+    private string GetCardLabel(Card card)
+    => card.Rank switch
+    {
+        Rank.Ace => "A",
+        Rank.Jack => "J",
+        Rank.Queen => "Q",
+        Rank.King => "K",
+        _ => ((int)card.Rank).ToString()
+    };
+
+    private double GetStackPos(int faceDownBefore, int faceUpBefore)
+    {
+        // mesmos valores base do CSS:
+        const double offsetDownBase = 0.20; // cartas viradas para baixo
+        const double offsetUp = 0.35; // cartas viradas para cima
+
+        double totalDown = 0;
+
+        for (int i = 0; i < faceDownBefore; i++)
+        {
+            double step = offsetDownBase;
+
+            // a partir da 7.ª face-down (i >= 6), vamos reduzindo o passo
+            if (i >= 6)
+            {
+                int extra = i - 5; // 1 para a 7.ª, 2 para a 8.ª, etc.
+                double factor = Math.Max(0.4, 1.0 - extra * 0.05);
+                step *= factor;
+            }
+
+            totalDown += step;
+        }
+
+        return totalDown + faceUpBefore * offsetUp;
+    }
+
+    // -------- Drag & Drop --------
+
+    private bool IsCardDraggable(int pileIndex, int cardIndex, Card card)
+    {
+        if (!card.IsFaceUp)
+            return false;
+
+        var pile = game.Piles[pileIndex];
+        int lastIndex = pile.Cards.Count - 1;
+        int endIndex = game.GetMovableSequenceEnd(pileIndex, cardIndex);
+
+        // mesma regra da seleção: só última carta ou bloco que termina na última
+        if (cardIndex != lastIndex && endIndex != lastIndex)
+            return false;
+
+        return true;
+    }
+
+    private void OnCardDragStart(DragEventArgs e, int pileIndex, int cardIndex)
+    {
+        var pile = game.Piles[pileIndex];
+        if (cardIndex < 0 || cardIndex >= pile.Cards.Count) return;
+
+        var card = pile.Cards[cardIndex];
+        if (!IsCardDraggable(pileIndex, cardIndex, card))
+            return;
+
+        dragFromPile = pileIndex;
+        dragFromIndex = cardIndex;
+
+        // opcional: marcar visualmente a seleção enquanto arrasta
+        selectedPile = pileIndex;
+        selectedIndex = cardIndex;
+        selectedSequenceEnd = game.GetMovableSequenceEnd(pileIndex, cardIndex);
+    }
+
+    private void OnPileDrop(DragEventArgs e, int toPile)
+    {
+        if (dragFromPile < 0) return;
+
+        int fromPile = dragFromPile;
+        int fromIndex = dragFromIndex;
+
+        ClearSelection();
+
+        bool moved = game.TryMoveSequence(fromPile, fromIndex, toPile);
+        statusMessage = moved ? "Movimento efetuado." : "Movimento invalido.";
+    }
+}
